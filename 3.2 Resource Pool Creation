@@ -1,0 +1,14 @@
+Step 1 Create an RBD resource pool.
+Run the following commands to create an RBD resource pool kubernetes:
+ceph osd pool create kubernetes
+ceph osd pool application enable kubernetes rbd
+ceph auth get-or-create client.kubernetes mon 'profile rbd' osd 'profile rbd pool=kubernetes' mgr
+'profile rbd pool=kubernetes'
+Step 2 Create a CephFS resource pool.
+Run the following commands to create the resource pool and MDS required by CephFS:
+ceph osd pool create kubernetes_data
+ceph osd pool create kubernetes_metadata
+ceph fs new kubernetes kubernetes_metadata kubernetes_data
+ceph orch apply mds kubernetes --placement="2"
+ceph fs authorize kubernetes client.kubernetes_ceph / rwps
+
