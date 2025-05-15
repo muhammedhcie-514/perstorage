@@ -1,0 +1,13 @@
+3.3 ceph-csi File Preparation
+Step 1 Download the standard ceph-csi file.
+Run the following commands on k8smaster1 to create a working directory:
+[root@k8smaster1 ~]# mkdir /root/ceph
+[root@k8smaster1 ~]# cd /root/ceph
+[root@k8smaster1 ceph]# git clone https://gitee.com/yftyxa/ceph-csi.git
+Step 2 Prepare required files.
+Create a dedicated directory (for example, to connect to RBD) and copy required files to
+the directory. The commands are as follows:
+[root@k8smaster1 ceph]# mkdir ~/ceph-rbd
+[root@k8smaster1 ceph]# cp /root/ceph/ceph-csi/deploy/rbd/kubernetes/* ~/ceph-rbd/
+[root@k8smaster1 ceph]# cp /root/ceph/ceph-csi/examples/rbd/secret.yaml ~/ceph-rbd/
+[root@k8smaster1 ceph]# cd ~/ceph-rbd/
