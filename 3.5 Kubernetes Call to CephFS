@@ -1,0 +1,160 @@
+Step 1 Create a namespace.
+To facilitate subsequent observation, run the following command to create a dedicated
+namespace:
+kubectl create ns cephfs
+Step 2 Prepare required files.
+Create a dedicated directory for storing required files by following instructions in section
+3.3. The commands are as follows:
+mkdir /root/cephfs
+cd /root/cephfs
+cp /root/ceph/ceph-csi/deploy/cephfs/kubernetes/* /root/cephfs/
+cp /root/ceph/ceph-csi/examples/cephfs/secret.yaml /root/cephfs/
+Step 3 Create a ConfigMap.
+Reuse the ConfigMap file in step 2 in section 3.4. Specify the newly created namespace
+when creating the ConfigMap file.
+kubectl apply -f /root/ceph-rbd/csi-config-map.yaml -n cephfs
+Step 4 Create a secret.
+On the Ceph node, query the information about the user of the connected RBD resource
+pool. The user is created in step 2 in section 3.2. The detailed information is as follows:
+[ceph: root@ceph01 /]# ceph auth get client.kubernetes_ceph
+[client.kubernetes_ceph]
+ key = AQDuSrNlBAsIHBAAO1WOmXhTzHMDl+m3WpyRVg==
+ caps mds = "allow rwps fsname=kubernetes"
+ caps mon = "allow r fsname=kubernetes"
+caps osd = "allow rw tag cephfs data=kubernetes"
+exported keyring for client.kubernetes_ceph
+
+
+In the following part, PVs will be created dynamically. You need to obtain the
+information about the Ceph administrator. In this lab, the admin user is used as an
+example.
+userID and userKey need to be specified in the secret.yaml file. The following is an
+example secret.yaml file:
+---
+apiVersion: v1
+kind: Secret
+metadata:
+ name: csi-cephfs-secret
+ namespace: cephfs
+stringData:
+ # Required for statically provisioned volumes
+ userID: kubernetes_ceph
+ userKey: AQDuSrNlBAsIHBAAO1WOmXhTzHMDl+m3WpyRVg==
+ # Required for dynamically provisioned volumes
+ adminID: admin
+ adminKey: AQBvgI5lqanTKhAAwyKQaG7i340SPTMTLBF7kQ==
+ # Encryption passphrase
+ encryptionPassphrase: test_passphrase
+
+
+Add a namespace. Then, use this file to deploy the secret. After the deployment is
+complete, verify that the secret information can be queried. The details are as follows:
+kubectl get secret -n cephfs
+
+
+Step 5 Deploy ceph-csi.
+Modify the namespace information in csi-provisioner-rbac.yaml, csi-nodepluginrbac.yaml, csi-rbdplugin-provisioner.yaml, and csi-rbdplugin.yaml. Change default to
+cephfs or manually add cephfs for the namespaces that have not specified the setting.
+You are advised to use sed to modify the namespace information in batches because
+there are multiple settings to be modified. After the modification, run the grep command
+and check whether the files contain namespace: default. If the modifications are correct
+and complete, run the following command to deploy ceph-csi:
+kubectl apply -f csi-nodeplugin-rbac.yaml -f csi-provisioner-rbac.yaml -f csi-cephfspluginprovisioner.yaml -f csi-cephfsplugin.yaml
+
+After the operation is complete, you can query the Deployment related to ceph-csi. The
+details are as follows:
+kubectl get deploy -n cephfs
+
+
+You can also query the following DaemonSet:
+kubectl get daemonset -n cephfs
+
+Verify that the information is correct before proceeding to the next step.
+
+
+
+Step 6 Mount storage.
+PVs can be created statically or dynamically. This lab creates a PV dynamically as an
+example.
+Create a StorageClass file csi-cephfs-sc.yaml as follows:
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+name: csi-cephfs-sc
+namespace: cephfs
+provisioner: cephfs.csi.ceph.com
+parameters:
+clusterID: 88ab034c-a622-11ee-9a8c-000c2905539b
+fsName: kubernetes
+pool: kubernetes_data
+csi.storage.k8s.io/provisioner-secret-name: csi-cephfs-secret
+csi.storage.k8s.io/provisioner-secret-namespace: cephfs
+csi.storage.k8s.io/controller-expand-secret-name: csi-cephfs-secret
+csi.storage.k8s.io/controller-expand-secret-namespace: cephfs
+csi.storage.k8s.io/node-stage-secret-name: csi-cephfs-secret
+csi.storage.k8s.io/node-stage-secret-namespace: cephfs
+mounter: kernel
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+
+
+
+
+Note: The namespace in this file must be the same as that of other object resources.
+secret must be the same as that created in step 4 of this lab.
+Run the kubectl apply -f csi- cephfs-sc.yaml command for deployment.
+Create a PVC file csi-cephfs-pvc.yaml as follows:
+
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+name: csi-cephfs-pvc
+namespace: cephfs
+spec:
+storageClassName: csi-cephfs-sc
+accessModes:
+ - ReadWriteMany
+volumeMode: Filesystem
+resources:
+ requests:
+ storage: 2Gi
+
+
+Note: The value of storageClassName in this file must be the same as that in csi-cephfssc.yaml.
+Run the kubectl apply -f csi-cephfs-pvc.yaml command for deployment.
+Create a pod file csi-cephfs-pod.yaml as follows:
+---
+apiVersion: v1
+kind: Pod
+metadata:
+ name: csi-cephfs-pod1
+ namespace: cephfs
+spec:
+ containers:
+ - name: csi-cephfs-pod1
+ image: nginx
+ volumeMounts:
+ - name: csi-cephfs-pod1
+ mountPath: /mnt
+ readOnly: false
+ volumes:
+ - name: csi-cephfs-pod1
+ persistentVolumeClaim:
+ claimName: csi-cephfs-pvc
+
+
+Run the kubectl apply -f csi-cephfs-pod.yaml command for deployment.
+
+
+Step 7 Verify the configuration results.
+On the Kubernetes node, verify that the PVC and PV are bound. The details are as
+follows:
+kubectl get pvc -n cephfs
+
+
+
+
+
+
